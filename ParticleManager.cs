@@ -3,7 +3,7 @@ using UnityEngine;
 
 public class ParticleManager : MonoBehaviour
 {
-    public GameObject circlePrefab;   // Dein Kreis Prefab
+    public GameObject circlePrefab;   // Kreis Prefab
     public int rows = 5;              // Anzahl der Reihen
     public int columns = 5;           // Anzahl der Spalten
     public float spacing = 1.5f;      // Abstand zwischen den Kreisen
