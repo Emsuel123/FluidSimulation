@@ -1,147 +1,89 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using Unity.Mathematics;
 
 public class Sim : MonoBehaviour
 {
-    private Camera kamera;
-
     [Header("Physik Parameter")]
-    public float gravitation;
-    public float daempfen;
-    public float influenceRadius;
-    public float masse;
-    public float halberKreis;
+    public float gravitation = 9.81f;
+    public float daempfen = 0.8f;
+    public float influenceRadius = 1.5f;
+    public float masse = 1f;
 
-    private float randomx = UnityEngine.Random.Range(-5f, 5f);
-    private float randomy = UnityEngine.Random.Range(0f, 5f);
-
-    [Header("Debug Werte (nur lesen)")]
+    [SerializeField] private float druck;
     [SerializeField] private float dichte;
 
-    Vector2 position;
-    Vector2 geschwindigkeit;
+    [HideInInspector] public int myIndex = -1;
+    [HideInInspector] public ParticleManager manager = null;
 
-    // Statische Liste für alle Partikel
-    public static List<Sim> allePartikel = new List<Sim>();
+    private Vector2 position;
+    private Vector2 geschwindigkeit;
 
     private void Awake()
     {
         position = transform.position;
     }
 
-    void Start()
+    private void Start()
     {
-       
-        kamera = Camera.main;
+        if (manager == null)
+            manager = FindObjectOfType<ParticleManager>();
 
-        // Positionen random verteilen
-        foreach (var p in allePartikel)
-        {
-            p.transform.position = new Vector3(randomx, randomy, 0);
-            p.BerechneDichte();
-        }
+        if (manager == null)
+            Debug.LogError($"Sim '{name}': Kein ParticleManager gefunden!");
     }
 
-    // Update is called once per frame
-    void Update()
+    private void Update()
     {
-        //Gravitation
+        // Gravitation
         geschwindigkeit += gravitation * Time.deltaTime * Vector2.down;
-        //Bewegung
+        ScreenBoundary();
+
+        druck = GetPressureCache();
+
+        // Bewegung
         position += geschwindigkeit * Time.deltaTime;
-
-        // Abstoßungskraft von Nachbarn
-        repellingParticle();
-
-        //position reassignen
         transform.position = position;
-
-        BerechneDichte();
-
-        //Bildschirmkollision
-        screenboundary();
     }
 
-
-    private void OnEnable()
+    public float GetPressureCache()
     {
-        allePartikel.Add(this);
+        if (manager == null)
+            return 0f;
+        if (myIndex < 0 || myIndex >= manager.pressureCache.Count)
+            return 0f;
+        return manager.pressureCache[myIndex];
     }
-    private void OnDisable()
-    {
-        allePartikel.Remove(this);
-    }
 
-    public void BerechneDichte()
+    public float LocalCalculatePressure()
     {
-        float neueDichte = 0f;
-
-        foreach (var p in allePartikel)
+        float pressure = 0f;
+        foreach (var other in manager.allePartikel)
         {
-            if (p == this) continue;
-
-            // Abstand zu anderen Partikeln
-            float r = Vector2.Distance(transform.position, p.transform.position);
-
-            if (r < influenceRadius)
-            {
-                float term = Mathf.Pow(influenceRadius - r, 2);
-                neueDichte += masse * term;
-            }
+            if (other == this) continue;
+            float dist = Vector2.Distance(transform.position, other.transform.position);
+            if (dist < influenceRadius)
+                pressure += masse * SmoothingKernel(influenceRadius, dist);
         }
-
-        dichte = neueDichte;
+        druck = pressure;
+        return pressure;
     }
 
-    private void screenboundary()
+    static float SmoothingKernel(float radius, float dist)
     {
-        Vector2 screenpos = kamera.WorldToScreenPoint(transform.position);
-        float minSpeed = 0.01f; // Threshold für kleine Geschwindigkeiten
-
-        // X-Richtung prüfen
-        if ((screenpos.x - halberKreis < 0 && geschwindigkeit.x < 0) ||
-            (screenpos.x + halberKreis > kamera.pixelWidth && geschwindigkeit.x > 0))
-        {
-            geschwindigkeit.x = -geschwindigkeit.x * daempfen;
-
-            if (Mathf.Abs(geschwindigkeit.x) < minSpeed)
-                geschwindigkeit.x = 0;
-        }
-
-        // Y-Richtung prüfen
-        if ((screenpos.y - halberKreis < 0 && geschwindigkeit.y < 0) ||
-            (screenpos.y + halberKreis > kamera.pixelHeight && geschwindigkeit.y > 0))
-        {
-            geschwindigkeit.y = -geschwindigkeit.y * daempfen;
-
-            if (Mathf.Abs(geschwindigkeit.y) < minSpeed)
-                geschwindigkeit.y = 0;
-        }
+        float wert = Mathf.Max(0f, radius - dist);
+        return wert * wert * wert;
     }
 
-
-    private void repellingParticle()
+    private void ScreenBoundary()
     {
-        Vector2 kraft = Vector2.zero;
+        float minX = -10f, maxX = 10f, minY = -5f, maxY = 5f, radius = 0.25f;
+        Vector2 pos = position;
+        pos.x = Mathf.Clamp(pos.x, minX + radius, maxX - radius);
+        pos.y = Mathf.Clamp(pos.y, minY + radius, maxY - radius);
 
-        foreach (var p in allePartikel)
-        {
-            if (p == this) continue;
+        if (pos.x <= minX + radius || pos.x >= maxX - radius) geschwindigkeit.x = -geschwindigkeit.x * daempfen;
+        if (pos.y <= minY + radius || pos.y >= maxY - radius) geschwindigkeit.y = -geschwindigkeit.y * daempfen;
 
-            Vector2 abstand = (Vector2)transform.position - (Vector2)p.transform.position;
-            float dist = abstand.magnitude;
-
-            if (dist < influenceRadius && dist > 0f)
-            {
-                // Abstoßung proportional zum Abstand
-                float repulsion = Mathf.Pow(influenceRadius - dist, 2) / influenceRadius;
-                kraft += abstand.normalized * repulsion;
-            }
-        }
-
-        // Geschwindigkeit anpassen
-        geschwindigkeit += kraft * Time.deltaTime;
+        position = pos;
     }
 }
