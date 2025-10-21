@@ -8,6 +8,8 @@ public class Sim : MonoBehaviour
     public float daempfen = 0.8f;
     public float influenceRadius = 1.5f;
     public float masse = 1f;
+    public float ruheDichte;
+    public float steifheitskonst;
 
     [SerializeField] private float druck;
     [SerializeField] private float dichte;
@@ -38,33 +40,43 @@ public class Sim : MonoBehaviour
         geschwindigkeit += gravitation * Time.deltaTime * Vector2.down;
         ScreenBoundary();
 
-        druck = GetPressureCache();
+        dichte = GetDichteCache();
+        druck = calculateDruck();
 
         // Bewegung
         position += geschwindigkeit * Time.deltaTime;
         transform.position = position;
     }
 
-    public float GetPressureCache()
+    public float GetDichteCache()
     {
         if (manager == null)
             return 0f;
-        if (myIndex < 0 || myIndex >= manager.pressureCache.Count)
+        if (myIndex < 0 || myIndex >= manager.dichteCache.Count)
             return 0f;
-        return manager.pressureCache[myIndex];
+        return manager.dichteCache[myIndex];
     }
 
-    public float LocalCalculatePressure()
+    public float LocalCalculateDichte()
     {
-        float pressure = 0f;
+        float density = 0f;
         foreach (var other in manager.allePartikel)
         {
             if (other == this) continue;
             float dist = Vector2.Distance(transform.position, other.transform.position);
             if (dist < influenceRadius)
-                pressure += masse * SmoothingKernel(influenceRadius, dist);
+                density += masse * SmoothingKernel(influenceRadius, dist);
         }
-        druck = pressure;
+        dichte = density;
+        return density;
+    }
+
+    public float calculateDruck()
+    {
+        float pressure = 0f;
+        float k = steifheitskonst;
+        pressure = k * (dichte - ruheDichte);
+
         return pressure;
     }
 
