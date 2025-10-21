@@ -11,7 +11,7 @@ public class ParticleManager : MonoBehaviour
     [Range(0f, 1f)] public float fillPercentage = 1f;
 
     [HideInInspector] public List<Sim> allePartikel = new List<Sim>();
-    [HideInInspector] public List<float> pressureCache = new List<float>();
+    [HideInInspector] public List<float> dichteCache = new List<float>();
 
     void Awake()
     {
@@ -37,25 +37,24 @@ public class ParticleManager : MonoBehaviour
                     // Nun Manager-Liste aktualisieren (Manager ist allein verantwortlich)
                     allePartikel.Add(s);
                     s.myIndex = allePartikel.Count - 1; 
-                    pressureCache.Add(0f); // Platz für Partikel reservieren
+                    dichteCache.Add(0f); // Platz für Partikel reservieren
                 }
             }
         }
 
-        Debug.Log($"Spawned {allePartikel.Count} particles. PressureCache size = {pressureCache.Count}");
     }
 
     void Update()
     {
-        if (pressureCache.Count != allePartikel.Count)
+        if (dichteCache.Count != allePartikel.Count)
         {
-            Debug.LogWarning($"[ParticleManager] pressureCache.Count ({pressureCache.Count}) != allePartikel.Count ({allePartikel.Count})");
+            Debug.LogWarning($"[ParticleManager] pressureCache.Count ({dichteCache.Count}) != allePartikel.Count ({allePartikel.Count})");
         }
 
         // Berechne Druck für jeden Partikel 
         for (int i = 0; i < allePartikel.Count; i++)
         {
-            pressureCache[i] = CalculatePressureFor(i);
+            dichteCache[i] = CalculatePressureFor(i);
         }
 
     }
@@ -83,7 +82,8 @@ public class ParticleManager : MonoBehaviour
     // Extern zugänglich
     static float SmoothingKernel(float radius, float dist)
     {
+        float volumen = Mathf.PI * Mathf.Pow(radius, 4) / 2;
         float wert = Mathf.Max(0f, radius - dist);
-        return wert * wert * wert;
+        return wert * wert * wert / volumen;
     }
 }
