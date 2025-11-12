@@ -12,6 +12,8 @@ public class ParticleManager : MonoBehaviour
 
     [HideInInspector] public List<Sim> allePartikel = new List<Sim>();
     [HideInInspector] public List<float> pressureCache = new List<float>();
+    [HideInInspector] public List<Vector2> postionen = new List<Vector2>();
+    [HideInInspector] public List<Vector2> bewegung = new List<Vector2>();
 
     void Awake()
     {
@@ -47,17 +49,18 @@ public class ParticleManager : MonoBehaviour
 
     void Update()
     {
-        if (pressureCache.Count != allePartikel.Count)
+        if (dichteCache.Count != allePartikel.Count)
         {
-            Debug.LogWarning($"[ParticleManager] pressureCache.Count ({pressureCache.Count}) != allePartikel.Count ({allePartikel.Count})");
+            Debug.LogWarning($"[ParticleManager] pressureCache.Count ({dichteCache.Count}) != allePartikel.Count ({allePartikel.Count})");
         }
 
-        // Berechne Druck für jeden Partikel 
+        // Berechne Druck und Position für jeden Partikel 
         for (int i = 0; i < allePartikel.Count; i++)
         {
-            pressureCache[i] = CalculatePressureFor(i);
+            dichteCache[i] = CalculatePressureFor(i);
+            postionen[i] = allePartikel[i].transform.position;
         }
-
+        
     }
 
     //Druckberechnung für Partikel mit Index i
@@ -80,10 +83,34 @@ public class ParticleManager : MonoBehaviour
         return pressure;
     }
 
+    private Vector2 Bewegungberechen(Vector2 punkt)
+    {
+
+        Vector2 bewegungsVektor = Vector2.zero;
+        for(int i = 0; i < allePartikel.Count; i++)
+        {
+            float distanz = (postionen[i] - punkt).magnitude;
+            Vector2 dir = (postionen[i] - punkt) / distanz;
+
+            bewegungsVektor = dir * allePartikel[i].masse * SmoothingKernelAbleitung(allePartikel[i].influenceRadius, distanz) / dichteCache[i];
+
+        }
+
+
+
+        return bewegungsVektor;
+    }
+
     // Extern zugänglich
     static float SmoothingKernel(float radius, float dist)
     {
         float wert = Mathf.Max(0f, radius - dist);
         return wert * wert * wert;
+    }
+    
+    static float SmoothingKernelAbleitung(float radius, float dist)
+    {
+        float wert = Mathf.Max(0f, radius - dist);
+        return 3 * Mathf.Pow(wert, 2);
     }
 }
