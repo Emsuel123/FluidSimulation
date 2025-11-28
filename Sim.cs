@@ -17,7 +17,7 @@ public class Sim : MonoBehaviour
     [HideInInspector] public int myIndex = -1;
     [HideInInspector] public ParticleManager manager = null;
 
-    private Vector2 position;
+    public Vector2 position;
     private Vector2 geschwindigkeit;
 
     private void Awake()
@@ -44,6 +44,7 @@ public class Sim : MonoBehaviour
         druck = calculateDruck();
 
         // Bewegung
+        geschwindigkeit += manager.Bewegungberechen(transform.position);
         position += geschwindigkeit * Time.deltaTime;
         transform.position = position;
     }
@@ -86,6 +87,7 @@ public class Sim : MonoBehaviour
         return wert * wert * wert;
     }
 
+    
     private void ScreenBoundary()
     {
         float minX = -10f, maxX = 10f, minY = -5f, maxY = 5f, radius = 0.25f;
