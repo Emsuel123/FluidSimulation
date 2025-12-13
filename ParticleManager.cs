@@ -10,11 +10,16 @@ public class ParticleManager : MonoBehaviour
     public float spacing = 1.5f;
     [Range(0f, 1f)] public float fillPercentage = 1f;
 
+    [HideInInspector] public Sim simulation = null;
+
     [HideInInspector] public List<Sim> allePartikel = new List<Sim>();
     [HideInInspector] public List<float> dichteCache = new List<float>();
-    [HideInInspector] public List<Vector2> postionen = new List<Vector2>();
+    [HideInInspector] public List<Vector2> positionen = new List<Vector2>();
     [HideInInspector] public List<Vector2> bewegung = new List<Vector2>();
     [HideInInspector] public List<float> druckCache = new List<float>();
+
+    Dictionary<Vector2Int, List<int>> grid = new();
+    public float cellSize = 1f;
 
     public float targetDichte;
     public float druckMulti;
@@ -24,6 +29,33 @@ public class ParticleManager : MonoBehaviour
         SpawnGrid();
     }
 
+    private void Start()
+    {
+        if (simulation == null)
+            simulation = FindObjectOfType<Sim>();
+    }
+
+
+
+    void Update()
+    {
+        // Positionsliste aktualisieren
+        for (int i = 0; i < allePartikel.Count; i++)
+            positionen[i] = allePartikel[i].transform.position;
+
+        // Spatial Grid bauen
+        BuildSpatialGrid();
+
+        // Dichte & Druck berechnen
+        for (int i = 0; i < allePartikel.Count; i++)
+        {
+            dichteCache[i] = CalculateDichteFor(i);
+            druckCache[i] = ConvertDichteZuDruck(dichteCache[i]);
+        }
+    }
+
+
+    //Spawner
     void SpawnGrid()
     {
         Vector2 startPos = transform.position;
@@ -42,10 +74,10 @@ public class ParticleManager : MonoBehaviour
 
                     // Nun Manager-Liste aktualisieren (Manager ist allein verantwortlich)
                     allePartikel.Add(s);
-                    s.myIndex = allePartikel.Count - 1; 
+                    s.myIndex = allePartikel.Count - 1;
                     dichteCache.Add(0f); // Platz für Partikel reservieren
                     druckCache.Add(0f);
-                    postionen.Add(Vector2.zero);
+                    positionen.Add(Vector2.zero);
                     bewegung.Add(Vector2.zero);
                 }
             }
@@ -53,79 +85,97 @@ public class ParticleManager : MonoBehaviour
 
     }
 
-    void Update()
-    {
-        if (dichteCache.Count != allePartikel.Count)
-        {
-            Debug.LogWarning($"[ParticleManager] pressureCache.Count ({dichteCache.Count}) != allePartikel.Count ({allePartikel.Count})");
-        }
 
-        // Berechnen für jedes Partikel 
+    // Spatial Hash
+    Vector2Int WorldToCell(Vector2 pos)
+    {
+        return new Vector2Int(
+            Mathf.FloorToInt(pos.x / cellSize),
+            Mathf.FloorToInt(pos.y / cellSize)
+        );
+    }
+
+    void BuildSpatialGrid()
+    {
+        grid.Clear();
+
         for (int i = 0; i < allePartikel.Count; i++)
         {
-            dichteCache[i] = CalculateDichteFor(i);
-            druckCache[i] = ConvertDichteZuDruck(i);
-            postionen[i] = allePartikel[i].transform.position;
-        }
+            Vector2Int cell = WorldToCell(allePartikel[i].position);
 
-        
+            if (!grid.TryGetValue(cell, out var list))
+            {
+                list = new List<int>();
+                grid[cell] = list;
+            }
+            list.Add(i);
+        }
+    }
+
+    IEnumerable<int> GetNeighborIndices(Vector2 position)
+    {
+        Vector2Int center = WorldToCell(position);
+
+        for (int x = -1; x <= 1; x++)
+            for (int y = -1; y <= 1; y++)
+            {
+                Vector2Int cell = center + new Vector2Int(x, y);
+                if (grid.TryGetValue(cell, out var list))
+                    foreach (int i in list)
+                        yield return i;
+            }
     }
 
     //Dichteberechnung für Partikel mit Index i
     public float CalculateDichteFor(int i)
     {
-        Sim self = allePartikel[i];
-        float Dichte = 0f;
+        Vector2 selfPos = positionen[i];
+        float dichte = 0f;
+        float radius = allePartikel[i].influenceRadius;
 
-        for (int j = 0; j < allePartikel.Count; j++)
+        foreach(int j in GetNeighborIndices(selfPos))
         {
             if (i == j) continue;
-            Sim other = allePartikel[j];
-            float dist = Vector2.Distance(self.transform.position, other.transform.position);
-            if (dist < self.influenceRadius)
-            {
-                Dichte += self.masse * SmoothingKernel(self.influenceRadius, dist);
-            }
+
+            float dist = Vector2.Distance(selfPos, positionen[j]);
+            if (dist < radius)
+                dichte += allePartikel[i].masse * SmoothingKernel(radius, dist);
         }
 
-        return Dichte;
+        return dichte;
     }
 
-    public float ConvertDichteZuDruck(int i)
+    float ConvertDichteZuDruck(float dichte)
     {
-        float Druck = 0f;
-
-        for(i = 0;  i < allePartikel.Count; i++)
-        {
-            Druck += druckMulti * (targetDichte - dichteCache[i]);
-        }
-     
-        return Druck;
+        return druckMulti * (dichte - targetDichte);
     }
+
 
     public Vector2 Bewegungberechen(Vector2 punkt)
     {
+        Vector2 kraft = Vector2.zero;
 
-        Vector2 bewegungsVektor = Vector2.zero;
-        for(int i = 0; i < allePartikel.Count; i++)
+        foreach (int i in GetNeighborIndices(punkt))
         {
-            float distanz = (postionen[i] - punkt).magnitude;
-            if(distanz == 0)
-            {
-                distanz += 0.01f;
-            }
-            Vector2 dir = (postionen[i] - punkt) / distanz;
-            if (dichteCache[i] == 0)
-            {
-                dichteCache[i] += 0.1f;
-            }
-            bewegungsVektor += druckCache[i] * dir * allePartikel[i].masse * SmoothingKernelAbleitung(allePartikel[i].influenceRadius, distanz) / dichteCache[i];
+            Vector2 diff = positionen[i] - punkt;
+            float dist = diff.magnitude;
+            if (dist <= 0.0001f) continue;
 
+            float dichte = Mathf.Max(dichteCache[i], 0.0001f);
+            float druck = druckCache[i];
+
+            kraft += -druck * diff.normalized * allePartikel[i].masse * SmoothingKernelAbleitung(allePartikel[i].influenceRadius, dist) / dichte;
         }
 
+        return kraft;
+    }
 
+    public float geteilterDruckberechnen(float dichteA, float DichteB)
+    {
+        float druckA = ConvertDichteZuDruck(dichteA);
+        float druckB = ConvertDichteZuDruck(DichteB);
 
-        return bewegungsVektor;
+        return (druckA + druckB) / 2; 
     }
 
     // Extern zugänglich
