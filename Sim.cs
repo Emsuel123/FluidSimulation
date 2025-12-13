@@ -4,17 +4,15 @@ using Unity.Mathematics;
 public class Sim : MonoBehaviour
 {
     [Header("Physik Parameter")]
-    public float gravitation = 9.81f;
-    public float daempfen = 0.8f;
+    public float gravitation;
+    public float daempfen;
     public float influenceRadius = 1.5f;
     public float masse = 1f;
-    public float ruheDichte;
-    public float steifheitskonst;
 
     [SerializeField] private float druck;
     [SerializeField] private float dichte;
 
-    [HideInInspector] public int myIndex = -1;
+    [HideInInspector] public int myIndex = 1;
     [HideInInspector] public ParticleManager manager = null;
 
     public Vector2 position;
@@ -41,7 +39,6 @@ public class Sim : MonoBehaviour
         ScreenBoundary();
 
         dichte = GetDichteCache();
-        druck = calculateDruck();
 
         // Bewegung
         geschwindigkeit += manager.Bewegungberechen(transform.position);
@@ -58,27 +55,18 @@ public class Sim : MonoBehaviour
         return manager.dichteCache[myIndex];
     }
 
-    public float LocalCalculateDichte()
+    public float LocalCalculateDichte(Vector2 position)
     {
         float density = 0f;
         foreach (var other in manager.allePartikel)
         {
             if (other == this) continue;
-            float dist = Vector2.Distance(transform.position, other.transform.position);
+            float dist = Vector2.Distance(position, other.transform.position);
             if (dist < influenceRadius)
                 density += masse * SmoothingKernel(influenceRadius, dist);
         }
         dichte = density;
         return density;
-    }
-
-    public float calculateDruck()
-    {
-        float pressure = 0f;
-        float k = steifheitskonst;
-        pressure = k * (dichte - ruheDichte);
-
-        return pressure;
     }
 
     static float SmoothingKernel(float radius, float dist)
@@ -90,7 +78,7 @@ public class Sim : MonoBehaviour
     
     private void ScreenBoundary()
     {
-        float minX = -10f, maxX = 10f, minY = -5f, maxY = 5f, radius = 0.25f;
+        float minX = -8f, maxX = 8f, minY = -4f, maxY = 4f, radius = 0.25f;
         Vector2 pos = position;
         pos.x = Mathf.Clamp(pos.x, minX + radius, maxX - radius);
         pos.y = Mathf.Clamp(pos.y, minY + radius, maxY - radius);
