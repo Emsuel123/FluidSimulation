@@ -23,6 +23,7 @@ public class ParticleManager : MonoBehaviour
 
     public float targetDichte;
     public float druckMulti;
+    public float viskositätMulti;
 
     void Awake()
     {
@@ -52,6 +53,8 @@ public class ParticleManager : MonoBehaviour
             dichteCache[i] = CalculateDichteFor(i);
             druckCache[i] = ConvertDichteZuDruck(dichteCache[i]);
         }
+        for (int i = 0; i < allePartikel.Count; i++)
+            bewegung[i] = allePartikel[i].geschwindigkeit;
     }
 
 
@@ -170,6 +173,22 @@ public class ParticleManager : MonoBehaviour
         return kraft;
     }
 
+    public Vector2 berechnenViskosität(int index)
+    {
+        Vector2 viskosität = Vector2.zero;
+        Vector2 pos = positionen[index];
+
+        foreach (int i in GetNeighborIndices(pos))
+        {
+            float dist = (pos - positionen[i]).magnitude;
+            float influence = ViskositatSmoothingKernel(1f, dist);
+            viskosität += (bewegung[i] - bewegung[index]) * influence;
+
+        }
+
+        return viskosität * viskositätMulti;
+    }
+
     public float geteilterDruckberechnen(float dichteA, float DichteB)
     {
         float druckA = ConvertDichteZuDruck(dichteA);
@@ -178,7 +197,7 @@ public class ParticleManager : MonoBehaviour
         return (druckA + druckB) / 2; 
     }
 
-    // Extern zugänglich
+    // funktions kurven
     static float SmoothingKernel(float radius, float dist)
     {
         float volumen = Mathf.PI * Mathf.Pow(radius, 4) / 2;
@@ -190,5 +209,12 @@ public class ParticleManager : MonoBehaviour
     {
         float wert = Mathf.Max(0f, radius - dist);
         return 3 * Mathf.Pow(wert, 2);
+    }
+
+    static float ViskositatSmoothingKernel(float radius, float dist)
+    {
+        float volumen = Mathf.PI * Mathf.Pow(radius, 4) / 2;
+        float wert = Mathf.Max(0f, radius - dist);
+        return wert * wert / volumen;
     }
 }
