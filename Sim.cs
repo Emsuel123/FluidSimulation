@@ -11,12 +11,13 @@ public class Sim : MonoBehaviour
 
     [SerializeField] private float druck;
     [SerializeField] private float dichte;
-
+    
     [HideInInspector] public int myIndex = 1;
     [HideInInspector] public ParticleManager manager = null;
 
     public Vector2 position;
-    private Vector2 geschwindigkeit;
+    public Vector2 geschwindigkeit;
+    private Vector2 beschleunigung;
 
     private void Awake()
     {
@@ -34,16 +35,20 @@ public class Sim : MonoBehaviour
 
     private void Update()
     {
-        // Gravitation
-        geschwindigkeit += gravitation * Time.deltaTime * Vector2.down;
-        ScreenBoundary();
+        // Beschleunigung
+        beschleunigung += manager.gravitation * Time.deltaTime * Vector2.down;
+
+        beschleunigung += manager.DruckKraftBerechnen(transform.position);
+        beschleunigung += manager.berechnenViskosität(myIndex, transform.position);
 
         dichte = GetDichteCache();
 
         // Bewegung
-        geschwindigkeit += manager.Bewegungberechen(transform.position);
+        geschwindigkeit += beschleunigung;
         position += geschwindigkeit * Time.deltaTime;
+        beschleunigung = Vector2.zero;
         transform.position = position;
+        ScreenBoundary();
     }
 
     public float GetDichteCache()
@@ -83,8 +88,8 @@ public class Sim : MonoBehaviour
         pos.x = Mathf.Clamp(pos.x, minX + radius, maxX - radius);
         pos.y = Mathf.Clamp(pos.y, minY + radius, maxY - radius);
 
-        if (pos.x <= minX + radius || pos.x >= maxX - radius) geschwindigkeit.x = -geschwindigkeit.x * daempfen;
-        if (pos.y <= minY + radius || pos.y >= maxY - radius) geschwindigkeit.y = -geschwindigkeit.y * daempfen;
+        if (pos.x <= minX + radius || pos.x >= maxX - radius) geschwindigkeit.x *= -daempfen;
+        if (pos.y <= minY + radius || pos.y >= maxY - radius) geschwindigkeit.y *= -daempfen;
 
         position = pos;
     }
