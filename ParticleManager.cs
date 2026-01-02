@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UIElements;
+using System.Linq;
 
 public class ParticleManager : MonoBehaviour
 {
@@ -15,12 +17,14 @@ public class ParticleManager : MonoBehaviour
     [HideInInspector] public List<Sim> allePartikel = new List<Sim>();
     [HideInInspector] public List<float> dichteCache = new List<float>();
     [HideInInspector] public List<Vector2> positionen = new List<Vector2>();
-    [HideInInspector] public List<Vector2> bewegung = new List<Vector2>();
+    [HideInInspector] public List<Vector2> geschwindigkeiten = new List<Vector2>();
     [HideInInspector] public List<float> druckCache = new List<float>();
+    
 
     Dictionary<Vector2Int, List<int>> grid = new();
     public float cellSize = 1f;
 
+    public float gravitation;
     public float targetDichte;
     public float druckMulti;
     public float viskositätMulti;
@@ -42,7 +46,11 @@ public class ParticleManager : MonoBehaviour
     {
         // Positionsliste aktualisieren
         for (int i = 0; i < allePartikel.Count; i++)
+        {
             positionen[i] = allePartikel[i].transform.position;
+        }
+            
+        
 
         // Spatial Grid bauen
         BuildSpatialGrid();
@@ -50,13 +58,14 @@ public class ParticleManager : MonoBehaviour
         // Dichte & Druck berechnen
         for (int i = 0; i < allePartikel.Count; i++)
         {
-            dichteCache[i] = CalculateDichteFor(i);
+            dichteCache[i] = CalculateDichteFor(i, positionen[i]);
             druckCache[i] = ConvertDichteZuDruck(dichteCache[i]);
         }
         for (int i = 0; i < allePartikel.Count; i++)
-            bewegung[i] = allePartikel[i].geschwindigkeit;
-    }
+            geschwindigkeiten[i] = allePartikel[i].geschwindigkeit;
 
+
+    }
 
     //Spawner
     void SpawnGrid()
@@ -75,13 +84,14 @@ public class ParticleManager : MonoBehaviour
                     //manager referenz setzen
                     s.manager = this;
 
-                    // Nun Manager-Liste aktualisieren (Manager ist allein verantwortlich)
+                    // Nun Manager-Liste aktualisieren
                     allePartikel.Add(s);
                     s.myIndex = allePartikel.Count - 1;
-                    dichteCache.Add(0f); // Platz für Partikel reservieren
+                    // Platz für Partikel reservieren
+                    dichteCache.Add(0f); 
                     druckCache.Add(0f);
                     positionen.Add(Vector2.zero);
-                    bewegung.Add(Vector2.zero);
+                    geschwindigkeiten.Add(Vector2.zero);
                 }
             }
         }
@@ -104,7 +114,7 @@ public class ParticleManager : MonoBehaviour
 
         for (int i = 0; i < allePartikel.Count; i++)
         {
-            Vector2Int cell = WorldToCell(allePartikel[i].position);
+            Vector2Int cell = WorldToCell(positionen[i]);
 
             if (!grid.TryGetValue(cell, out var list))
             {
@@ -130,9 +140,9 @@ public class ParticleManager : MonoBehaviour
     }
 
     //Dichteberechnung für Partikel mit Index i
-    public float CalculateDichteFor(int i)
+    public float CalculateDichteFor(int i, Vector2 selfPos)
     {
-        Vector2 selfPos = positionen[i];
+        
         float dichte = 0f;
         float radius = allePartikel[i].influenceRadius;
 
@@ -154,7 +164,7 @@ public class ParticleManager : MonoBehaviour
     }
 
 
-    public Vector2 Bewegungberechen(Vector2 punkt)
+    public Vector2 DruckKraftBerechnen(Vector2 punkt)
     {
         Vector2 kraft = Vector2.zero;
 
@@ -173,16 +183,15 @@ public class ParticleManager : MonoBehaviour
         return kraft;
     }
 
-    public Vector2 berechnenViskosität(int index)
+    public Vector2 berechnenViskosität(int index, Vector2 pos)
     {
         Vector2 viskosität = Vector2.zero;
-        Vector2 pos = positionen[index];
 
         foreach (int i in GetNeighborIndices(pos))
         {
             float dist = (pos - positionen[i]).magnitude;
             float influence = ViskositatSmoothingKernel(1f, dist);
-            viskosität += (bewegung[i] - bewegung[index]) * influence;
+            viskosität += (geschwindigkeiten[i] - geschwindigkeiten[index]) * influence;
 
         }
 
